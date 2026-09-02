@@ -1,301 +1,141 @@
-"""Agent orchestration framework for the AI Test Case Generator.
-
-This module provides the AgentOrchestrator class which manages the
-execution of agents in the correct order, maintains workflow state,
-handles errors, and provides checkpoints for resumability.
-"""
+from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
 from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import Dict, List, Optional
 
-from src.orchestration.workflow_state import WorkflowState, WorkflowStatus, AgentExecutionRecord
+from src.orchestration.workflow_state import WorkflowState
 from src.utils.logger import get_logger
 
 logger = get_logger("orchestrator")
 
 
 class Agent(ABC):
-    """Abstract base class for agents in the orchestration pipeline."""
+    """Base class for all workflow agents."""
 
     @property
     @abstractmethod
     def name(self) -> str:
-        """Return the agent's name."""
-        raise NotImplementedError()
+        """Return the unique agent name."""
+        raise NotImplementedError
 
     @abstractmethod
     def execute(self, state: WorkflowState) -> WorkflowState:
-        """Execute the agent and return updated state.
-
-        The agent should:
-        1. Get or create its execution record
-        2. Mark itself as started
-        3. Perform its work
-        4. Update state with results
-        5. Mark itself as completed or failed
-        """
-        raise NotImplementedError()
+        """Perform work against the current workflow state."""
+        raise NotImplementedError
 
 
 class AgentOrchestrator:
-    """Orchestrates the execution of agents in the agentic workflow.
+    """Coordinates execution of multiple agents over a shared WorkflowState."""
 
-    Features:
-    - Registers agents and their execution order
-    - Executes agents sequentially with state management
-    - Tracks agent execution history and metrics
-    - Handles errors and recovery
-    - Persists workflow state
-    - Provides resumability
-    """
+    def __init__(self, state_dir: Optional[str | Path] = None):
+        project_root = Path(__file__).resolve().parents[2]
+        self.state_dir = Path(state_dir) if state_dir else project_root / "data" / "workflows"
+        self.state_dir.mkdir(parents=True, exist_ok=True)
 
-    def __init__(self, state_dir: Optional[Path] = None):
-        """Initialize the orchestrator.
-
-        Args:
-            state_dir: Directory to persist workflow state. If None,
-                      uses in-memory state only.
-        """
-        self.agents: List[Agent] = []
-        self.agent_map: Dict[str, Agent] = {}
-        self.state_dir = Path(state_dir) if state_dir else None
-        if self.state_dir:
-            self.state_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Workflow state will be persisted to: {self.state_dir}")
-        else:
-            logger.info("Workflow state is in-memory only (not persistent)")
+        self.agents: Dict[str, Agent] = {}
+        self.agent_order: List[str] = []
 
     def register_agent(self, agent: Agent) -> None:
-        """Register an agent for orchestration.
+        """Register a new agent in the workflow."""
+        if not isinstance(agent, Agent):
+            raise TypeError("Expected an Agent instance")
 
-        Agents are executed in the order they are registered.
-
-        Args:
-            agent: An instance of a class implementing the Agent interface
-        """
-        self.agents.append(agent)
-        self.agent_map[agent.name] = agent
-        logger.info(f"Registered agent: {agent.name}")
-
-    def register_agents(self, *agents: Agent) -> None:
-        """Register multiple agents at once."""
-        for agent in agents:
-            self.register_agent(agent)
-
-    def _get_state_file(self, workflow_id: str) -> Path:
-        """Get the path for a workflow state file."""
-        if not self.state_dir:
-            raise ValueError("State persistence is not enabled")
-        return self.state_dir / f"{workflow_id}.json"
-
-    def save_state(self, state: WorkflowState) -> None:
-        """Persist workflow state to disk."""
-        if not self.state_dir:
-            logger.debug("State persistence disabled; skipping save")
+        if agent.name in self.agents:
+            logger.warning("Agent already registered: %s", agent.name)
             return
 
-        try:
-            state_file = self._get_state_file(state.workflow_id)
-            state_json = state.model_dump_json(indent=2)
-            state_file.write_text(state_json)
-            logger.info(f"Workflow state persisted: {state_file}")
-        except Exception as e:
-            logger.error(f"Failed to persist workflow state: {e}")
+        self.agents[agent.name] = agent
+        self.agent_order.append(agent.name)
+        logger.info("Registered agent: %s", agent.name)
 
-    def load_state(self, workflow_id: str) -> Optional[WorkflowState]:
-        """Load workflow state from disk.
+    def unregister_agent(self, agent_name: str) -> None:
+        """Remove an agent from the workflow."""
+        self.agents.pop(agent_name, None)
+        if agent_name in self.agent_order:
+            self.agent_order.remove(agent_name)
 
-        Args:
-            workflow_id: The workflow ID to load
+    def _state_file_for(self, workflow_id: str) -> Path:
+        return self.state_dir / f"{workflow_id}.json"
 
-        Returns:
-            WorkflowState if found, None otherwise
-        """
-        if not self.state_dir:
-            logger.debug("State persistence disabled; cannot load state")
-            return None
+    def save_state(self, state: WorkflowState) -> Path:
+        """Persist a workflow state to disk."""
+        file_path = self._state_file_for(state.workflow_id)
+        payload = state.model_dump(mode="json")
+        file_path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+        logger.info("Saved workflow state: %s -> %s", state.workflow_id, file_path)
+        return file_path
 
-        try:
-            state_file = self._get_state_file(workflow_id)
-            if not state_file.exists():
-                logger.debug(f"No persisted state found: {state_file}")
-                return None
+    def load_state(self, workflow_id: str) -> WorkflowState:
+        """Load a workflow state from disk by workflow ID."""
+        file_path = self._state_file_for(workflow_id)
+        if not file_path.exists():
+            raise FileNotFoundError(f"No workflow state found for ID: {workflow_id}")
 
-            state_json = state_file.read_text()
-            state_dict = json.loads(state_json)
-            state = WorkflowState(**state_dict)
-            logger.info(f"Workflow state loaded: {state_file}")
-            return state
-        except Exception as e:
-            logger.error(f"Failed to load workflow state: {e}")
-            return None
+        data = json.loads(file_path.read_text(encoding="utf-8"))
+        return WorkflowState.model_validate(data)
+
+    def list_workflows(self) -> List[str]:
+        """Return all workflow IDs currently saved on disk."""
+        return sorted(p.stem for p in self.state_dir.glob("*.json"))
+
+    def _get_resume_index(self, state: WorkflowState) -> int:
+        """Return the first agent not yet completed successfully."""
+        completed_agents = {
+            record.agent_name
+            for record in state.agent_history
+            if record.status == "success"
+        }
+        for idx, agent_name in enumerate(self.agent_order):
+            if agent_name not in completed_agents:
+                return idx
+        return len(self.agent_order)
 
     def execute(
         self,
-        initial_state: WorkflowState,
-        skip_agents: Optional[List[str]] = None,
+        state: WorkflowState,
         fail_on_error: bool = True,
+        start_index: int = 0,
     ) -> WorkflowState:
-        """Execute the workflow using registered agents.
+        """Execute all registered agents sequentially on the workflow state."""
+        logger.info("Starting workflow execution: %s", state.workflow_id)
+        logger.info("Total agents: %d, starting at index: %d", len(self.agents), start_index)
 
-        Args:
-            initial_state: The starting workflow state
-            skip_agents: List of agent names to skip (e.g., for recovery)
-            fail_on_error: If True, halt on first error. If False, collect errors.
-
-        Returns:
-            Updated WorkflowState after all agents execute
-        """
-        state = initial_state
-        skip_set = set(skip_agents or [])
-
-        logger.info(f"Starting workflow execution: {state.workflow_id}")
-        logger.info(f"Total agents: {len(self.agents)}, Skipping: {len(skip_set)}")
-
-        for agent in self.agents:
-            if agent.name in skip_set:
-                logger.info(f"Skipping agent (on skip list): {agent.name}")
+        for idx, agent_name in enumerate(self.agent_order[start_index:], start=start_index):
+            agent = self.agents.get(agent_name)
+            if agent is None:
                 continue
 
-            # Check if workflow is ready for this agent
-            stage = self._get_stage_for_agent(agent.name)
-            is_ready, error_msg = state.is_ready_for_stage(stage)
-            if not is_ready:
-                logger.warning(f"Agent {agent.name} preconditions not met: {error_msg}")
-                state.add_warning(agent.name, f"Preconditions not met: {error_msg}")
-                if fail_on_error:
-                    state.add_error(agent.name, error_msg, severity="critical")
-                    state.transition_status(WorkflowStatus.FAILED)
-                    self.save_state(state)
-                    raise RuntimeError(f"Workflow failed: {error_msg}")
-                continue
+            record = state.get_agent_record(agent.name)
+            if record is None:
+                record = state.create_agent_record(agent.name)
 
-            # Execute agent
-            logger.info(f"Executing agent: {agent.name}")
+            logger.info("Executing agent: %s", agent.name)
             try:
+                record.mark_started()
                 state = agent.execute(state)
-                record = state.get_agent_record(agent.name)
-                if record:
-                    logger.info(
-                        f"Agent completed: {agent.name} "
-                        f"(duration: {record.duration_ms}ms, status: {record.status})"
-                    )
-                    if record.warnings:
-                        for warning in record.warnings:
-                            state.add_warning(agent.name, warning)
-
-            except Exception as e:
-                logger.exception(f"Agent failed with exception: {agent.name}")
-                state.add_error(agent.name, str(e), severity="critical")
-                record = state.get_agent_record(agent.name)
-                if record:
-                    record.mark_failed(str(e))
-                state.transition_status(WorkflowStatus.FAILED)
-                self.save_state(state)
+            except Exception as exc:
+                record.mark_failed(str(exc))
+                logger.exception("Agent failed: %s", agent.name)
+                state.add_error(agent.name, str(exc), severity="critical")
                 if fail_on_error:
                     raise
-                else:
-                    # Continue with next agent despite error
-                    continue
+                break
 
-            # Check for errors in state
-            if state.has_critical_errors():
-                logger.error("Workflow has critical errors; halting execution")
-                state.transition_status(WorkflowStatus.FAILED)
-                self.save_state(state)
-                if fail_on_error:
-                    raise RuntimeError("Workflow has critical errors")
-                else:
-                    break
+            if state is None:
+                raise RuntimeError(f"Agent {agent.name} returned None")
 
-            # Persist state checkpoint
+            record.mark_completed()
             self.save_state(state)
+            logger.info("Agent completed: %s", agent.name)
 
-        # Mark workflow as completed
-        if state.status != WorkflowStatus.FAILED:
-            state.transition_status(WorkflowStatus.COMPLETED)
-            self.save_state(state)
-            logger.info(f"Workflow completed successfully: {state.workflow_id}")
-        else:
-            logger.error(f"Workflow failed: {state.workflow_id}")
-
+        logger.info("Workflow execution finished: %s", state.workflow_id)
         return state
 
-    def _get_stage_for_agent(self, agent_name: str) -> str:
-        """Map agent name to workflow stage."""
-        stage_map = {
-            "requirement_agent": "requirements_analysis",
-            "scenario_agent": "scenarios_generation",
-            "test_case_agent": "test_cases_generation",
-            "validation_agent": "validation",
-            "coverage_agent": "coverage_analysis",
-            "ui_classifier_agent": "ui_classification",
-            "playwright_agent": "automation_generation",
-        }
-        return stage_map.get(agent_name, "unknown")
-
-    def get_execution_summary(self, state: WorkflowState) -> Dict[str, Any]:
-        """Get a summary of workflow execution."""
-        return state.get_execution_summary()
-
-    def resume_workflow(
-        self,
-        workflow_id: str,
-        from_agent: Optional[str] = None,
-        fail_on_error: bool = True,
-    ) -> Optional[WorkflowState]:
-        """Resume a previously saved workflow.
-
-        Args:
-            workflow_id: The workflow ID to resume
-            from_agent: Agent to resume from. If None, resumes from last failed agent.
-            fail_on_error: If True, halt on first error. If False, collect errors.
-
-        Returns:
-            Updated WorkflowState, or None if workflow not found
-        """
+    def resume_workflow(self, workflow_id: str, fail_on_error: bool = False) -> WorkflowState:
+        """Reload state and continue execution from the next unfinished agent."""
         state = self.load_state(workflow_id)
-        if not state:
-            logger.error(f"Cannot resume: workflow not found {workflow_id}")
-            return None
-
-        logger.info(f"Resuming workflow: {workflow_id}")
-        logger.info(f"Current status: {state.status}")
-
-        # Determine which agents to skip
-        skip_agents = []
-        if from_agent:
-            # Skip all agents before the specified one
-            for agent in self.agents:
-                if agent.name == from_agent:
-                    break
-                skip_agents.append(agent.name)
-        else:
-            # Skip all agents that have already completed successfully
-            for record in state.agent_history:
-                if record.status == "success":
-                    skip_agents.append(record.agent_name)
-
-        logger.info(f"Skipping {len(skip_agents)} previously completed agents")
-
-        # Reset status to allow resumption
-        state.transition_status(WorkflowStatus.RECEIVED)
-
-        # Execute with skips
-        return self.execute(state, skip_agents=skip_agents, fail_on_error=fail_on_error)
-
-    def list_workflows(self) -> List[str]:
-        """List all persisted workflow IDs.
-
-        Returns:
-            List of workflow IDs found in the state directory
-        """
-        if not self.state_dir:
-            return []
-
-        workflow_ids = []
-        for state_file in self.state_dir.glob("*.json"):
-            workflow_ids.append(state_file.stem)
-        return sorted(workflow_ids)
+        start_index = self._get_resume_index(state)
+        logger.info("Resuming workflow %s from agent index %d", workflow_id, start_index)
+        return self.execute(state, fail_on_error=fail_on_error, start_index=start_index)
