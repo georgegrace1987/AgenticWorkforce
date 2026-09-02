@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Requirements Wizard</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand-mark" aria-hidden="true">AR</div>
+    <div>
+      <p class="eyebrow">Requirements workspace</p>
+      <h1>AI Requirements Wizard</h1>
+    </div>
+    <button class="session-button" type="button">New session</button>
+  </header>
+
+  <main class="workspace">
+    <section class="intro" aria-labelledby="workspace-title">
+      <p class="eyebrow">From rough idea to trusted specification</p>
+      <h2 id="workspace-title">Shape the brief before it shapes the build.</h2>
+      <p class="intro-copy">Bring together conversations and source material. The wizard will surface what is clear, what is missing, and what needs a decision.</p>
+    </section>
+
+    <section class="workspace-grid">
+      <aside class="panel source-panel" aria-labelledby="source-title">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">01 / Source material</p>
+            <h3 id="source-title">Project inputs</h3>
+          </div>
+          <span class="status-dot" title="Workspace ready"></span>
+        </div>
+        <label class="dropzone" for="file-input">
+          <span class="drop-icon">+</span>
+          <strong>Drop files here</strong>
+          <span>DOCX, PDF, TXT, XLSX, PPTX</span>
+          <input id="file-input" type="file" multiple accept=".docx,.pdf,.txt,.xlsx,.xls,.pptx">
+        </label>
+        <div class="file-list" id="file-list">
+          <p class="muted">No files attached yet.</p>
+        </div>
+        <div class="project-note">
+          <span class="note-label">Project</span>
+          <strong>Untitled requirements brief</strong>
+          <button type="button" class="icon-button" aria-label="Edit project name">Edit</button>
+        </div>
+      </aside>
+
+      <section class="panel conversation-panel" aria-labelledby="conversation-title">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">02 / Discovery</p>
+            <h3 id="conversation-title">Wizard conversation</h3>
+          </div>
+          <span class="live-label">Ready</span>
+        </div>
+        <div class="messages" id="messages" aria-live="polite">
+          <article class="message assistant-message">
+            <div class="avatar">W</div>
+            <div>
+              <p class="message-meta">Wizard <time>Now</time></p>
+              <p>Tell me what you are trying to build, who it is for, or attach an existing brief. I will turn the first pass into a structured set of decisions.</p>
+            </div>
+          </article>
+        </div>
+        <form class="composer" id="chat-form">
+          <textarea id="message-input" rows="3" placeholder="Describe the product, workflow, or problem to solve..." aria-label="Requirement message"></textarea>
+          <div class="composer-footer">
+            <span>Enter to send · Shift + Enter for a new line</span>
+            <button class="send-button" type="submit">Send <span aria-hidden="true">→</span></button>
+          </div>
+        </form>
+      </section>
+
+      <aside class="panel readiness-panel" aria-labelledby="readiness-title">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">03 / Signal</p>
+            <h3 id="readiness-title">Readiness</h3>
+          </div>
+          <strong class="score" id="readiness-score">0%</strong>
+        </div>
+        <div class="progress-track"><span id="readiness-progress" style="width: 0%"></span></div>
+        <p class="readiness-copy" id="readiness-copy">Start with the business objective. The checklist will update as the brief takes shape.</p>
+        <ul class="checklist">
+          <li data-readiness-key="Business objective"><span>○</span> Business objective</li>
+          <li data-readiness-key="Users and roles"><span>○</span> Users and roles</li>
+          <li data-readiness-key="Core workflows"><span>○</span> Core workflows</li>
+          <li data-readiness-key="Quality expectations"><span>○</span> Quality expectations</li>
+          <li data-readiness-key="Constraints and risks"><span>○</span> Constraints and risks</li>
+        </ul>
+        <button class="generate-button" id="generate-button" type="button" disabled>Generate SRD <span aria-hidden="true">↗</span></button>
+      </aside>
+    </section>
+  </main>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

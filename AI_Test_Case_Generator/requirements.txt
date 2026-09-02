@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+gradio
+pydantic
+pydantic-settings
+pandas
+openpyxl
+python-dotenv
+httpx
+PyMuPDF
+python-docx
+python-pptx
+Pillow
+pytesseract
+pytest
+requests
+mcp
