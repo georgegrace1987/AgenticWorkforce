@@ -1,0 +1,83 @@
+[
+  {
+    "test_case_id": "TC001",
+    "requirement_id": "REQ001",
+    "scenario_id": "SCEN001",
+    "title": "User Login with Valid Credentials",
+    "test_type": "Functional",
+    "priority": "High",
+    "preconditions": [
+      "Browser is open",
+      "User is on login page",
+      "Valid user account exists"
+    ],
+    "test_data": {
+      "username": "testuser@example.com",
+      "password": "SecurePassword123"
+    },
+    "test_steps": [
+      {
+        "step_number": 1,
+        "action": "Enter username 'testuser@example.com' in username field",
+        "expected": "Username is entered successfully"
+      },
+      {
+        "step_number": 2,
+        "action": "Enter password in password field",
+        "expected": "Password is masked"
+      },
+      {
+        "step_number": 3,
+        "action": "Click Login button",
+        "expected": "User is redirected to dashboard"
+      }
+    ],
+    "expected_result": "User is successfully logged in and dashboard is displayed",
+    "postconditions": [
+      "User session is created",
+      "User is logged out after test completion"
+    ],
+    "positive": true,
+    "automation_candidate": true
+  },
+  {
+    "test_case_id": "TC002",
+    "requirement_id": "REQ001",
+    "scenario_id": "SCEN002",
+    "title": "User Login with Invalid Credentials",
+    "test_type": "Functional",
+    "priority": "High",
+    "preconditions": [
+      "Browser is open",
+      "User is on login page"
+    ],
+    "test_data": {
+      "username": "testuser@example.com",
+      "password": "WrongPassword"
+    },
+    "test_steps": [
+      {
+        "step_number": 1,
+        "action": "Enter username in username field",
+        "expected": "Username is entered"
+      },
+      {
+        "step_number": 2,
+        "action": "Enter incorrect password",
+        "expected": "Password is entered"
+      },
+      {
+        "step_number": 3,
+        "action": "Click Login button",
+        "expected": "Error message is displayed"
+      }
+    ],
+    "expected_result": "Login fails and error message 'Invalid credentials' is shown",
+    "postconditions": [
+      "User remains on login page",
+      "Login form is cleared"
+    ],
+    "positive": false,
+    "automation_candidate": true
+  }
+]

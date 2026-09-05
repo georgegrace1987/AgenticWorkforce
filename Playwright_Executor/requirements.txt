@@ -1,0 +1,7 @@
+# Playwright Test Generator Requirements
+
+playwright>=1.40.0
+pytest>=7.0.0
+pytest-playwright>=0.4.0
+pytest-asyncio>=0.21.0
+pydantic>=2.0.0
