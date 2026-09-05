@@ -27,6 +27,11 @@ APPLICATIONS = {
         "directory": ROOT_DIR / "AI_Test_Case_Generator",
         "port": 7860,
     },
+    "playwright": {
+        "name": "Playwright Test Executor",
+        "directory": ROOT_DIR / "Playwright_Executor",
+        "port": 8002,
+    },
 }
 
 child_processes: dict[str, subprocess.Popen] = {}
@@ -102,7 +107,7 @@ class MasterRequestHandler(BaseHTTPRequestHandler):
             <article class="app-card">
                 <p class="eyebrow">{application_id.replace('-', ' ').upper()}</p>
                 <h2>{application['name']}</h2>
-                <p>{'Turn informal ideas into structured software requirements.' if application_id == 'requirements' else 'Analyze source documents and generate complete test cases.'}</p>
+                <p>{'Turn informal ideas into structured software requirements.' if application_id == 'requirements' else 'Analyze source documents and generate complete test cases.' if application_id == 'test-cases' else 'Generate and execute Playwright tests from test case data.'}</p>
                 <a class="launch-button" href="/launch/{application_id}">Launch workspace <span aria-hidden="true">&rarr;</span></a>
             </article>
             """
