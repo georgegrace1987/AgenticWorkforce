@@ -68,6 +68,27 @@ def test_skip_advances_past_all_current_questions() -> None:
     assert "constraints" in response.requirements.answered_topics
 
 
+def test_skip_and_proceed_command_resolves_pending_questions() -> None:
+    service = WizardService({})
+
+    service.process_message("session-proceed", "Build an invoice portal.")
+    response = service.process_message("session-proceed", "Skip and proceed with document")
+
+    assert response.open_questions == []
+    assert response.readiness_score == 100
+
+
+def test_multiline_message_preserves_each_requirement() -> None:
+    service = WizardService({})
+
+    response = service.process_message(
+        "session-multiline",
+        "The game teaches kids Python.\nThe player fills in incomplete code.\nThe system checks syntax errors.",
+    )
+
+    assert len(response.requirements.functional_requirements) >= 2
+
+
 def test_conversation_extracts_roles_access_and_quality_requirements() -> None:
     service = WizardService({})
 
@@ -83,3 +104,21 @@ def test_conversation_extracts_roles_access_and_quality_requirements() -> None:
     assert response.requirements.non_functional_requirements
     assert response.readiness_items["Quality expectations"]
     assert response.requirements.functional_requirements
+
+
+def test_generate_srd_unlocks_when_readiness_reaches_100() -> None:
+    """Regression test for the disabled Generate SRD button at 100% readiness.
+
+    Fallback questions must stay aligned with the readiness checklist so that
+    reaching 100% readiness leaves no open questions blocking generation.
+    """
+    service = WizardService({})
+
+    service.process_message("session-complete", "Build an invoice portal.")
+    service.process_message("session-complete", "Customers and admins will use it.")
+    service.process_message("session-complete", "Customers can view invoices and pay online.")
+    service.process_message("session-complete", "It must be secure and available 99.9% of the time.")
+    response = service.process_message("session-complete", "Constraints: must integrate with Stripe and comply with PCI-DSS.")
+
+    assert response.readiness_score == 100
+    assert response.open_questions == []

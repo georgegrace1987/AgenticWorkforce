@@ -49,6 +49,8 @@ h3 { margin-bottom: 0; font-size: 22px; font-weight: 500; }
 .composer { padding-top: 15px; border-top: 1px solid var(--line); }
 textarea { width: 100%; padding: 4px 0; color: var(--ink); resize: vertical; border: 0; outline: 0; background: transparent; font-size: 17px; line-height: 1.45; }
 .composer-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--muted); font: 11px Arial, sans-serif; }
+.composer-actions { display: flex; align-items: center; gap: 8px; }
+.stop-button { padding: 10px 12px; color: var(--accent-dark); background: transparent; border: 1px solid var(--accent); cursor: pointer; }
 .send-button, .generate-button { padding: 11px 15px; color: #fff; background: var(--accent); border: 0; cursor: pointer; }
 .send-button:disabled { cursor: wait; opacity: .65; }
 .send-button span, .generate-button span { margin-left: 10px; font-family: Arial, sans-serif; }
@@ -59,6 +61,12 @@ textarea { width: 100%; padding: 4px 0; color: var(--ink); resize: vertical; bor
 .checklist li { padding: 13px 0; display: flex; gap: 10px; border-bottom: 1px solid var(--line); font-size: 15px; }
 .checklist span { color: var(--accent); font-family: Arial, sans-serif; }
 .checklist li.complete { color: #628567; }
+.requirements-review { padding-top: 4px; border-top: 1px solid var(--line); }
+.requirements-review h4 { margin: 0 0 14px; font-size: 18px; font-weight: 500; }
+.summary-group { padding: 11px 0; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.4; }
+.summary-group strong { display: block; margin-bottom: 5px; color: var(--accent-dark); font: 700 10px Arial, sans-serif; letter-spacing: 1px; text-transform: uppercase; }
+.summary-group ul { padding-left: 18px; margin: 0; }
+.summary-group li { margin: 3px 0; }
 .generate-button { width: 100%; margin-top: 42px; opacity: .45; }
 .generate-button:not(:disabled) { opacity: 1; }
 @media (max-width: 980px) { .workspace-grid { grid-template-columns: 1fr 1.4fr; } .readiness-panel { grid-column: 1 / -1; min-height: auto; } .generate-button { margin-top: 18px; } }

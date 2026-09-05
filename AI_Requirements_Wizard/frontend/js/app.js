@@ -7,7 +7,10 @@ const readinessScore = document.querySelector('#readiness-score');
 const readinessProgress = document.querySelector('#readiness-progress');
 const readinessCopy = document.querySelector('#readiness-copy');
 const generateButton = document.querySelector('#generate-button');
+const requirementsSummary = document.querySelector('#requirements-summary');
 const sessionButton = document.querySelector('.session-button');
+const stopQuestionsButton = document.querySelector('#stop-questions-button');
+const supportedExtensions = new Set(['.docx', '.pptx', '.xlsx', '.csv', '.txt']);
 const sessionId = localStorage.getItem('requirements-session-id') || crypto.randomUUID();
 localStorage.setItem('requirements-session-id', sessionId);
 
@@ -23,8 +26,9 @@ fileInput.addEventListener('change', async () => {
     : '<p class="muted">No files attached yet.</p>';
   if (!files.length) return;
   const file = files[0];
-  if (!file.name.toLowerCase().endsWith('.docx')) {
-    appendMessage('!', 'System', 'Please attach a DOCX file so I can extract its requirements.');
+  const extension = `.${file.name.split('.').pop().toLowerCase()}`;
+  if (!supportedExtensions.has(extension)) {
+    appendMessage('!', 'System', 'Please attach a DOCX, PPTX, XLSX, CSV, or TXT file so I can extract its requirements.');
     return;
   }
   fileList.insertAdjacentHTML('beforeend', '<p class="muted">Reading document...</p>');
@@ -75,6 +79,11 @@ chatForm.addEventListener('submit', async (event) => {
   messageInput.focus();
 });
 
+stopQuestionsButton.addEventListener('click', async () => {
+  messageInput.value = 'Stop asking questions';
+  chatForm.requestSubmit();
+});
+
 function appendMessage(initial, author, text) {
   const message = document.createElement('article');
   message.className = 'message';
@@ -94,18 +103,46 @@ function formatErrorDetail(detail) {
 }
 
 function updateReadiness(result) {
+  renderRequirements(result.requirements);
   readinessScore.textContent = `${result.readiness_score}%`;
   readinessProgress.style.width = `${result.readiness_score}%`;
+  const questionsPaused = result.requirements?.questions_paused || false;
   readinessCopy.textContent = result.open_questions.length
     ? `Next decision to refine: ${result.open_questions[0]}`
+    : questionsPaused
+    ? 'Questions are paused. You can review and generate the SRD now.'
     : 'The brief has a strong starting shape. Review it before generating the SRD.';
-  const canGenerate = result.readiness_score === 100 && result.open_questions.length === 0;
+  const canGenerate = (result.readiness_score === 100 && result.open_questions.length === 0) || questionsPaused;
   generateButton.disabled = !canGenerate;
   document.querySelectorAll('[data-readiness-key]').forEach((item) => {
-    const complete = result.readiness_items[item.dataset.readinessKey];
+    const complete = result.readiness_items?.[item.dataset.readinessKey] || false;
     item.classList.toggle('complete', complete);
     item.querySelector('span').textContent = complete ? '✓' : '○';
   });
+}
+
+function renderRequirements(requirements) {
+  const sections = [
+    ['Business objective', requirements.business_objective ? [requirements.business_objective] : []],
+    ['Stakeholders', requirements.stakeholders],
+    ['User roles', requirements.user_roles],
+    ['Functional requirements', requirements.functional_requirements],
+    ['Non-functional requirements', requirements.non_functional_requirements],
+    ['Constraints', requirements.constraints],
+    ['Risks', requirements.risks],
+    ['Assumptions', requirements.assumptions],
+    ['Open questions', requirements.open_questions],
+  ];
+  requirementsSummary.innerHTML = sections.map(([label, values]) => {
+    const items = values.length
+      ? `<ul>${values.map((value) => `<li>${escapeHtml(value)}</li>`).join('')}</ul>`
+      : '<p class="muted">None captured yet.</p>';
+    return `<div class="summary-group"><strong>${label}</strong>${items}</div>`;
+  }).join('');
+}
+
+function escapeHtml(value) {
+  return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
 
 generateButton.addEventListener('click', async () => {

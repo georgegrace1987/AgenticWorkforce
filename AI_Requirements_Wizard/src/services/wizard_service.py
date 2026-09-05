@@ -15,22 +15,25 @@ class WizardService:
     def process_message(self, session_id: str, message: str) -> ChatResponse:
         state = self.sessions.setdefault(session_id, RequirementState())
         cleaned = " ".join(message.split())
+        if self._is_stop_command(cleaned):
+            state.questions_paused = True
+            state.open_questions = []
         for question in state.open_questions:
             if question not in state.asked_questions:
                 state.asked_questions.append(question)
         self._resolve_pending_questions(state, cleaned)
-        self._extract(state, cleaned)
+        self._extract(state, message.strip())
         self._record_answered_topics(state, cleaned)
         uses_llm_analysis = hasattr(self.provider, "analyze")
         analysis = self.provider.analyze(state.model_dump(), cleaned) if uses_llm_analysis else {}
         self._merge_llm_requirements(state, analysis.get("requirements", {}))
-        questions = [str(question).strip() for question in analysis.get("questions", []) if str(question).strip()][:3]
-        if not questions and not uses_llm_analysis:
+        questions = [] if state.questions_paused else [str(question).strip() for question in analysis.get("questions", []) if str(question).strip()][:3]
+        if not questions and not state.questions_paused and not uses_llm_analysis:
             questions = self.provider.generate_questions(state.model_dump(), cleaned)
-        if not questions:
+        if not questions and not state.questions_paused:
             questions = self._fallback_questions(state, self._readiness_items(state))
         questions = self._remove_answered_questions(state, questions)
-        if not questions:
+        if not questions and not state.questions_paused:
             questions = self._remove_answered_questions(state, self._fallback_questions(state, self._readiness_items(state)))
         state.open_questions = questions
         items = self._readiness_items(state)
@@ -47,13 +50,23 @@ class WizardService:
         )
 
     @staticmethod
+    def _is_stop_command(message: str) -> bool:
+        return message.lower().strip() in {
+            "stop asking questions",
+            "stop asking",
+            "do not ask questions",
+            "don't ask questions",
+            "no more questions",
+        }
+
+    @staticmethod
     def _merge_llm_requirements(state: RequirementState, updates: dict) -> None:
         if not isinstance(updates, dict):
             return
         objective = updates.get("business_objective")
         if objective and not state.business_objective:
             state.business_objective = str(objective).strip()
-        for field in ("stakeholders", "user_roles", "functional_requirements", "non_functional_requirements", "constraints", "risks", "assumptions"):
+        for field in ("stakeholders", "user_roles", "functional_requirements", "non_functional_requirements", "technical_requirements", "constraints", "dependencies", "exceptions", "restrictions", "risks", "assumptions"):
             values = updates.get(field) or []
             if not isinstance(values, list):
                 continue
@@ -133,6 +146,12 @@ class WizardService:
             elif section == "issues" and value.lower() != "no information captured":
                 if value not in state.open_questions:
                     state.open_questions.append(value)
+            elif any(word in lower for word in ("fill", "check", "analyze", "complexity", "level", "generate")):
+                if value not in state.functional_requirements:
+                    state.functional_requirements.append(value)
+            elif any(word in lower for word in ("python", "web based", "web-based", "database", "api", "framework", "architecture", "hosting", "browser")):
+                if value not in state.technical_requirements:
+                    state.technical_requirements.append(value)
             elif requirement_match or any(word in lower for word in ("must", "should", "allow", "enable", "can ", "will have", "access", "read/write", "add", "update", "delete", "dashboard", "report")):
                 if value not in state.functional_requirements:
                     state.functional_requirements.append(value)
@@ -144,18 +163,31 @@ class WizardService:
     def _readiness_items(state: RequirementState) -> dict[str, bool]:
         return {
             "Business objective": bool(state.business_objective),
-            "Users and roles": bool(state.user_roles),
-            "Core workflows": bool(state.functional_requirements),
+            "Users and roles": bool(state.user_roles) or "users" in state.answered_topics,
+            "Core workflows": bool(state.functional_requirements) or "workflow" in state.answered_topics,
             "Quality expectations": "quality" in state.answered_topics or bool(state.non_functional_requirements),
             "Constraints and risks": "constraints" in state.answered_topics or bool(state.constraints or state.risks),
         }
 
     @staticmethod
     def _resolve_pending_questions(state: RequirementState, message: str) -> None:
-        lower = message.lower()
+        lower = message.lower().strip().rstrip(".!?")
         if not state.open_questions:
             return
-        skip_answer = lower in {"skip", "skipped", "not specified", "not sure", "unknown", "no information"}
+        skip_answer = (
+            lower in {"skip", "skipped", "not specified", "not sure", "unknown", "no information", "no other requirements"}
+            or lower.startswith("skip ")
+            or "proceed with document" in lower
+        )
+        no_requirements = lower == "no other requirements"
+        if skip_answer:
+            for topic in ("users", "workflow", "quality", "constraints", "exceptions", "technical"):
+                if topic not in state.answered_topics:
+                    state.answered_topics.append(topic)
+        if no_requirements:
+            for topic in ("users", "workflow", "quality", "constraints"):
+                if topic not in state.answered_topics:
+                    state.answered_topics.append(topic)
         for question in state.open_questions:
             question_lower = question.lower()
             if any(term in question_lower for term in ("security", "performance", "availability")):
@@ -181,6 +213,8 @@ class WizardService:
             "workflow": ("workflow", "must support", "process"),
             "quality": ("security", "performance", "availability"),
             "constraints": ("limit", "policy", "constraint", "integration"),
+            "technical": ("technical", "stack", "runtime", "framework", "deployment", "data store", "hosting"),
+            "exceptions": ("error", "invalid", "exception", "failure", "validation"),
         }
         filtered = []
         for question in questions:
@@ -200,6 +234,8 @@ class WizardService:
             "workflow": ("must", "should", "allow", "enable", "workflow", "transfer", "view"),
             "quality": ("secure", "security", "fast", "performance", "availability", "available"),
             "constraints": ("limit", "constraint", "only", "except", "cannot", "must not"),
+            "technical": ("python", "web", "database", "api", "framework", "hosting", "browser", "architecture"),
+            "exceptions": ("error", "invalid", "exception", "failure", "fails", "validation"),
         }
         lower = message.lower()
         for topic, words in topic_words.items():
@@ -208,14 +244,20 @@ class WizardService:
 
     @staticmethod
     def _fallback_questions(state: RequirementState, items: dict[str, bool]) -> list[str]:
+        """Ask only about the topics shown in the readiness checklist.
+
+        Keeping fallback questions aligned with `_readiness_items` prevents the
+        readiness score from reaching 100% while unresolved questions remain,
+        which is what disables the Generate SRD button in the UI.
+        """
         questions: list[str] = []
-        if not items["Users and roles"] and "users" not in state.answered_topics:
+        if not items["Users and roles"]:
             questions.append(WizardService._fresh_question(state, "Who will use the system, and what roles should they have?", "Which people or teams need access, and what should each role be able to do?"))
-        if not items["Core workflows"] and "workflow" not in state.answered_topics:
+        if not items["Core workflows"]:
             questions.append(WizardService._fresh_question(state, "What is the most important workflow the system must support?", "What should a user be able to accomplish from start to finish?"))
-        if not state.non_functional_requirements and "quality" not in state.answered_topics:
+        if not items["Quality expectations"]:
             questions.append(WizardService._fresh_question(state, "Are there security, performance, or availability expectations?", "What standards should the product meet for security, speed, reliability, or usability?"))
-        if not state.constraints and "constraints" not in state.answered_topics:
+        if not items["Constraints and risks"]:
             questions.append(WizardService._fresh_question(state, "Are there important limits, policies, or integrations to consider?", "Does the solution need to follow any policies, connect to other systems, or work within known limits?"))
         return questions[:3]
 

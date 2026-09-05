@@ -11,7 +11,7 @@ from src.utils.logger import get_logger
 from src.models.requirements import ChatRequest, ChatResponse, GenerateRequest
 from src.services.wizard_service import WizardService
 from src.services.srd_generator import SRDGenerator
-from src.document_processing.docx_loader import extract_docx_text
+from src.document_processing.document_loader import extract_document_text, SUPPORTED_EXTENSIONS
 from src.integrations.filesystem_mcp import FilesystemMCP
 
 logger = get_logger("api")
@@ -48,17 +48,18 @@ def create_app() -> FastAPI:
 
     @application.post("/api/documents", response_model=ChatResponse, tags=["requirements"])
     async def ingest_document(session_id: str, file: UploadFile = File(...)) -> ChatResponse:
-        if file.filename is None or not file.filename.lower().endswith(".docx"):
+        if file.filename is None or Path(file.filename).suffix.lower() not in SUPPORTED_EXTENSIONS:
             from fastapi import HTTPException
 
-            raise HTTPException(status_code=400, detail="Only DOCX files are supported.")
+            supported = ", ".join(sorted(SUPPORTED_EXTENSIONS))
+            raise HTTPException(status_code=400, detail=f"Unsupported file type. Supported formats: {supported}")
         content = await file.read()
         try:
-            extracted_text = extract_docx_text(content)
+            extracted_text = extract_document_text(file.filename, content)
         except Exception as error:
             from fastapi import HTTPException
 
-            raise HTTPException(status_code=400, detail=f"Could not read DOCX: {error}") from error
+            raise HTTPException(status_code=400, detail=f"Could not read document: {error}") from error
         if not extracted_text.strip():
             from fastapi import HTTPException
 

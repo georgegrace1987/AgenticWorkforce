@@ -1,15 +1,16 @@
 from pathlib import Path
 from typing import Optional
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables or .env file."""
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     # LLM configuration
     LLM_PROVIDER: str = Field("lmstudio", description="LLM provider (lmstudio|ollama|openai)")
@@ -39,10 +40,6 @@ class Settings(BaseSettings):
     # Timeouts and retries
     REQUEST_TIMEOUT_SECONDS: int = Field(30)
     LLM_RETRY_COUNT: int = Field(2)
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
     def create_dirs(self) -> None:
         """Create runtime directories if they don't exist."""

@@ -7,12 +7,17 @@ class RequirementState(BaseModel):
     user_roles: list[str] = Field(default_factory=list)
     functional_requirements: list[str] = Field(default_factory=list)
     non_functional_requirements: list[str] = Field(default_factory=list)
+    technical_requirements: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
+    dependencies: list[str] = Field(default_factory=list)
+    exceptions: list[str] = Field(default_factory=list)
+    restrictions: list[str] = Field(default_factory=list)
     risks: list[str] = Field(default_factory=list)
     open_questions: list[str] = Field(default_factory=list)
     asked_questions: list[str] = Field(default_factory=list)
     assumptions: list[str] = Field(default_factory=list)
     answered_topics: list[str] = Field(default_factory=list)
+    questions_paused: bool = False
 
 
 class ChatRequest(BaseModel):

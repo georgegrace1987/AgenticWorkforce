@@ -35,8 +35,8 @@
         <label class="dropzone" for="file-input">
           <span class="drop-icon">+</span>
           <strong>Drop files here</strong>
-          <span>DOCX, PDF, TXT, XLSX, PPTX</span>
-          <input id="file-input" type="file" multiple accept=".docx,.pdf,.txt,.xlsx,.xls,.pptx">
+          <span>DOCX, PPTX, XLSX, CSV, TXT</span>
+          <input id="file-input" type="file" multiple accept=".docx,.pptx,.xlsx,.csv,.txt">
         </label>
         <div class="file-list" id="file-list">
           <p class="muted">No files attached yet.</p>
@@ -69,7 +69,10 @@
           <textarea id="message-input" rows="3" placeholder="Describe the product, workflow, or problem to solve..." aria-label="Requirement message"></textarea>
           <div class="composer-footer">
             <span>Enter to send · Shift + Enter for a new line</span>
-            <button class="send-button" type="submit">Send <span aria-hidden="true">→</span></button>
+            <div class="composer-actions">
+              <button class="stop-button" id="stop-questions-button" type="button">Stop questions</button>
+              <button class="send-button" type="submit">Send <span aria-hidden="true">→</span></button>
+            </div>
           </div>
         </form>
       </section>
@@ -91,6 +94,13 @@
           <li data-readiness-key="Quality expectations"><span>○</span> Quality expectations</li>
           <li data-readiness-key="Constraints and risks"><span>○</span> Constraints and risks</li>
         </ul>
+        <section class="requirements-review" aria-labelledby="requirements-review-title">
+          <p class="eyebrow">Review before generation</p>
+          <h4 id="requirements-review-title">All gathered requirements</h4>
+          <div id="requirements-summary">
+            <p class="muted">Requirements will appear here as they are gathered.</p>
+          </div>
+        </section>
         <button class="generate-button" id="generate-button" type="button" disabled>Generate SRD <span aria-hidden="true">↗</span></button>
       </aside>
     </section>
